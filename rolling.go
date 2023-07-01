@@ -11,6 +11,10 @@ type ll struct {
 
 // Linked list used to keep track of distinct values to support
 // updating Min/Max without scanning the entire window.
+// TODO try BTree, RBT, or SkipList.
+// LL result:
+// BenchmarkWindow_Add_10k-8        3098827               361.9 ns/op
+// BenchmarkWindow_Add_100k-8       2918926               431.5 ns/op
 type setLL struct {
 	value float64
 	cnt   int64
