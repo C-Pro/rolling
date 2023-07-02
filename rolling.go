@@ -15,10 +15,10 @@ type ll struct {
 	prev  *ll
 }
 
-// Heh, RBT is even slower:
+// Using RBT instead of linked list for distinct values.
 // Linked list:
-// BenchmarkWindow_Add_10k-8        3098827               361.9 ns/op
-// BenchmarkWindow_Add_100k-8       2918926               431.5 ns/op
+// BenchmarkWindow_Add_10k-8          55465             37098 ns/op
+// BenchmarkWindow_Add_100k-8         65210             98093 ns/op
 // RBT:
 // BenchmarkWindow_Add_10k-8        1614670               631.1 ns/op
 // BenchmarkWindow_Add_100k-8       1562439               709.3 ns/op

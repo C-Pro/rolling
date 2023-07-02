@@ -2,6 +2,7 @@ package rolling
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -23,13 +24,13 @@ func ExampleNewWindow() {
 func BenchmarkWindow_Add_10k(b *testing.B) {
 	w := NewWindow(10_000, time.Second)
 	for i := 0; i < b.N; i++ {
-		w.Add(float64(i))
+		w.Add(rand.Float64())
 	}
 }
 
 func BenchmarkWindow_Add_100k(b *testing.B) {
 	w := NewWindow(100_000, time.Second)
 	for i := 0; i < b.N; i++ {
-		w.Add(float64(i))
+		w.Add(rand.Float64())
 	}
 }
