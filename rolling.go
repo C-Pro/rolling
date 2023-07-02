@@ -1,6 +1,12 @@
 package rolling
 
-import "time"
+import (
+	"math"
+	"time"
+
+	rbt "github.com/ugurcsen/gods-generic/trees/redblacktree"
+	"github.com/ugurcsen/gods-generic/utils"
+)
 
 type ll struct {
 	value float64
@@ -9,17 +15,16 @@ type ll struct {
 	prev  *ll
 }
 
-// Linked list used to keep track of distinct values to support
-// updating Min/Max without scanning the entire window.
-// TODO try BTree, RBT, or SkipList.
-// LL result:
+// Heh, RBT is even slower:
+// Linked list:
 // BenchmarkWindow_Add_10k-8        3098827               361.9 ns/op
 // BenchmarkWindow_Add_100k-8       2918926               431.5 ns/op
-type setLL struct {
+// RBT:
+// BenchmarkWindow_Add_10k-8        1614670               631.1 ns/op
+// BenchmarkWindow_Add_100k-8       1562439               709.3 ns/op
+type distinctVal struct {
 	value float64
 	cnt   int64
-	next  *setLL
-	prev  *setLL
 }
 
 type Window struct {
@@ -33,16 +38,14 @@ type Window struct {
 	min float64
 	max float64
 
-	orderedHead  *setLL
-	orderedTail  *setLL
-	orderedIndex map[float64]*setLL
+	orderedIndex *rbt.Tree[float64, *distinctVal]
 }
 
 func NewWindow(maxSize int64, duration time.Duration) *Window {
 	return &Window{
 		maxSize:      maxSize,
 		duration:     duration,
-		orderedIndex: make(map[float64]*setLL),
+		orderedIndex: rbt.NewWith[float64, *distinctVal](utils.NumberComparator[float64]),
 	}
 }
 
@@ -54,76 +57,47 @@ func (w *Window) addMinMax(value float64) {
 		w.max = value
 	}
 
-	val, ok := w.orderedIndex[value]
+	val, ok := w.orderedIndex.Get(value)
 	if !ok {
-		val = &setLL{value: value, cnt: 0}
+		val = &distinctVal{value: value, cnt: 0}
 	}
 
 	val.cnt++
-	w.orderedIndex[value] = val
-
-	if ok {
-		// The value is already in the list, we're done here.
-		return
-	}
-
-	if w.orderedHead == nil {
-		w.orderedHead = val
-		w.orderedTail = val
-		return
-	}
-
-	if value < w.orderedHead.value {
-		w.orderedHead.prev = val
-		val.next = w.orderedHead
-		w.orderedHead = val
-		return
-	}
-
-	if value > w.orderedTail.value {
-		w.orderedTail.next = val
-		val.prev = w.orderedTail
-		w.orderedTail = val
-		return
-	}
-
-	// Search for the correct position to insert the new value.
-	for cur := w.orderedHead; cur != nil; cur = cur.next {
-		if value < cur.value {
-			cur.prev.next = val
-			val.prev = cur.prev
-			val.next = cur
-			cur.prev = val
-			return
-		}
-	}
+	w.orderedIndex.Put(value, val)
 }
 
 func (w *Window) removeMinMax(value float64) {
-	val := w.orderedIndex[value]
+	val, _ := w.orderedIndex.Get(value)
 	val.cnt--
 	if val.cnt > 0 {
 		return
 	}
 
-	delete(w.orderedIndex, value)
-
-	if val == w.orderedHead {
-		w.orderedHead = val.next
-		w.orderedHead.prev = nil
-		w.min = w.orderedHead.value
-		return
+	if w.max == value {
+		max := math.NaN()
+		node := w.orderedIndex.GetNode(value)
+		if node != nil {
+			it := w.orderedIndex.IteratorAt(node)
+			if it.Prev() {
+				max = it.Value().value
+			}
+		}
+		w.max = max
 	}
 
-	if val == w.orderedTail {
-		w.orderedTail = val.prev
-		w.orderedTail.next = nil
-		w.max = w.orderedTail.value
-		return
+	if w.min == value {
+		min := math.NaN()
+		node := w.orderedIndex.GetNode(value)
+		if node != nil {
+			it := w.orderedIndex.IteratorAt(node)
+			if it.Next() {
+				min = it.Value().value
+			}
+		}
+		w.min = min
 	}
 
-	val.prev.next = val.next
-	val.next.prev = val.prev
+	w.orderedIndex.Remove(value)
 }
 
 func (w *Window) Add(value float64) {
