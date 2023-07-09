@@ -4,8 +4,7 @@ import (
 	"math"
 	"time"
 
-	rbt "github.com/ugurcsen/gods-generic/trees/redblacktree"
-	"github.com/ugurcsen/gods-generic/utils"
+	"github.com/gammazero/deque"
 )
 
 type ll struct {
@@ -15,17 +14,16 @@ type ll struct {
 	prev  *ll
 }
 
-// Using RBT instead of linked list for distinct values.
+// Trying different approaches to maintain min/max values:
 // Linked list:
 // BenchmarkWindow_Add_10k-8          55465             37098 ns/op
 // BenchmarkWindow_Add_100k-8         65210             98093 ns/op
 // RBT:
 // BenchmarkWindow_Add_10k-8        1614670               631.1 ns/op
 // BenchmarkWindow_Add_100k-8       1562439               709.3 ns/op
-type distinctVal struct {
-	value float64
-	cnt   int64
-}
+// Deque:
+// BenchmarkWindow_Add_10k-8        5358396               200.0 ns/op
+// BenchmarkWindow_Add_100k-8       4138747               315.4 ns/op
 
 type Window struct {
 	maxSize  int64
@@ -38,72 +36,68 @@ type Window struct {
 	min float64
 	max float64
 
-	orderedIndex *rbt.Tree[float64, *distinctVal]
+	minDeque *deque.Deque[float64]
+	maxDeque *deque.Deque[float64]
 }
 
 func NewWindow(maxSize int64, duration time.Duration) *Window {
 	return &Window{
-		maxSize:      maxSize,
-		duration:     duration,
-		orderedIndex: rbt.NewWith[float64, *distinctVal](utils.NumberComparator[float64]),
+		maxSize:  maxSize,
+		duration: duration,
+		minDeque: deque.New[float64](),
+		maxDeque: deque.New[float64](),
+		min:      math.MaxFloat64,
+		max:      -math.MaxFloat64,
 	}
 }
 
 func (w *Window) addMinMax(value float64) {
 	if value < w.min || w.cnt == 0 {
 		w.min = value
+		w.minDeque.Clear()
+		w.minDeque.PushFront(value)
+	} else {
+		w.minDeque.PushBack(value)
 	}
 	if value > w.max || w.cnt == 0 {
 		w.max = value
+		w.minDeque.Clear()
+		w.maxDeque.PushFront(value)
+	} else {
+		w.maxDeque.PushBack(value)
 	}
-
-	val, ok := w.orderedIndex.Get(value)
-	if !ok {
-		val = &distinctVal{value: value, cnt: 0}
-	}
-
-	val.cnt++
-	w.orderedIndex.Put(value, val)
 }
 
 func (w *Window) removeMinMax(value float64) {
-	val, _ := w.orderedIndex.Get(value)
-	val.cnt--
-	if val.cnt > 0 {
-		return
-	}
-
-	if w.max == value {
-		max := math.NaN()
-		node := w.orderedIndex.GetNode(value)
-		if node != nil {
-			it := w.orderedIndex.IteratorAt(node)
-			if it.Prev() {
-				max = it.Value().value
-			}
+	if value == w.max {
+		w.maxDeque.PopFront()
+		w.max = math.NaN()
+		if w.maxDeque.Len() > 0 {
+			w.max = w.maxDeque.Front()
 		}
-		w.max = max
 	}
-
-	if w.min == value {
-		min := math.NaN()
-		node := w.orderedIndex.GetNode(value)
-		if node != nil {
-			it := w.orderedIndex.IteratorAt(node)
-			if it.Next() {
-				min = it.Value().value
-			}
+	if value == w.min {
+		w.minDeque.PopFront()
+		w.min = math.NaN()
+		if w.minDeque.Len() > 0 {
+			w.min = w.minDeque.Front()
 		}
-		w.min = min
 	}
-
-	w.orderedIndex.Remove(value)
 }
 
 func (w *Window) Add(value float64) {
-	w.addMinMax(value)
 	w.cnt++
 	w.sum += value
+
+	if w.cnt > w.maxSize ||
+		(w.head != nil && time.Since(w.head.ts) > w.duration) {
+		w.sum -= w.head.value
+		w.cnt--
+		w.removeMinMax(w.head.value)
+		w.head = w.head.next
+	}
+
+	w.addMinMax(value)
 
 	if w.head == nil {
 		w.head = &ll{value: value, ts: time.Now()}
@@ -117,14 +111,6 @@ func (w *Window) Add(value float64) {
 		prev:  w.tail,
 	}
 	w.tail = w.tail.next
-
-	if w.cnt > w.maxSize ||
-		(w.head != nil && time.Since(w.head.ts) > w.duration) {
-		w.sum -= w.head.value
-		w.removeMinMax(w.head.value)
-		w.head = w.head.next
-		w.cnt--
-	}
 }
 
 func (w *Window) Sum() float64 {
