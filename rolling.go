@@ -22,8 +22,8 @@ type ll struct {
 // BenchmarkWindow_Add_10k-8        1614670               631.1 ns/op
 // BenchmarkWindow_Add_100k-8       1562439               709.3 ns/op
 // Deque:
-// BenchmarkWindow_Add_10k-8        5358396               200.0 ns/op
-// BenchmarkWindow_Add_100k-8       4138747               315.4 ns/op
+// BenchmarkWindow_Add_10k-8        5558586               213.1 ns/op
+// BenchmarkWindow_Add_100k-8       5055327               211.9 ns/op
 
 type Window struct {
 	maxSize  int64
@@ -52,36 +52,45 @@ func NewWindow(maxSize int64, duration time.Duration) *Window {
 }
 
 func (w *Window) addMinMax(value float64) {
-	if value < w.min || w.cnt == 0 {
-		w.min = value
-		w.minDeque.Clear()
-		w.minDeque.PushFront(value)
-	} else {
-		w.minDeque.PushBack(value)
+	if w.minDeque.Len() > 0 {
+		for w.minDeque.Len() > 0 {
+			b := w.minDeque.Back()
+			if value < b {
+				w.minDeque.PopBack()
+			} else {
+				break
+			}
+		}
 	}
-	if value > w.max || w.cnt == 0 {
-		w.max = value
-		w.minDeque.Clear()
-		w.maxDeque.PushFront(value)
-	} else {
-		w.maxDeque.PushBack(value)
+	w.minDeque.PushBack(value)
+	w.min = w.minDeque.Front()
+
+	if w.maxDeque.Len() > 0 {
+		for w.maxDeque.Len() > 0 {
+			b := w.maxDeque.Back()
+			if value > b {
+				w.maxDeque.PopBack()
+			} else {
+				break
+			}
+		}
 	}
+	w.maxDeque.PushBack(value)
+	w.max = w.maxDeque.Front()
 }
 
 func (w *Window) removeMinMax(value float64) {
-	if value == w.max {
+	if w.maxDeque.Front() == value {
 		w.maxDeque.PopFront()
-		w.max = math.NaN()
-		if w.maxDeque.Len() > 0 {
-			w.max = w.maxDeque.Front()
-		}
 	}
-	if value == w.min {
+	if w.maxDeque.Len() == 0 {
+		w.max = -math.MaxFloat64
+	}
+	if w.minDeque.Front() == value {
 		w.minDeque.PopFront()
-		w.min = math.NaN()
-		if w.minDeque.Len() > 0 {
-			w.min = w.minDeque.Front()
-		}
+	}
+	if w.minDeque.Len() == 0 {
+		w.min = math.MaxFloat64
 	}
 }
 
@@ -89,8 +98,16 @@ func (w *Window) Add(value float64) {
 	w.cnt++
 	w.sum += value
 
-	if w.cnt > w.maxSize ||
-		(w.head != nil && time.Since(w.head.ts) > w.duration) {
+	// Remove head if window is full.
+	if w.cnt > w.maxSize {
+		w.sum -= w.head.value
+		w.cnt--
+		w.removeMinMax(w.head.value)
+		w.head = w.head.next
+	}
+
+	// Truncate old values.
+	for w.head != nil && time.Since(w.head.ts) > w.duration {
 		w.sum -= w.head.value
 		w.cnt--
 		w.removeMinMax(w.head.value)
@@ -110,6 +127,7 @@ func (w *Window) Add(value float64) {
 		ts:    time.Now(),
 		prev:  w.tail,
 	}
+
 	w.tail = w.tail.next
 }
 

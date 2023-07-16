@@ -130,31 +130,30 @@ func arrayAvg(a []float64) float64 {
 }
 
 func TestFuzz(t *testing.T) {
-	const (
-		sz         = 5
-		iterations = 100_000
-	)
-	w := NewWindow(sz, time.Minute)
-	window := make([]float64, sz)
-	for i := 0; i < iterations; i++ {
-		value := rand.Float64()
-		w.Add(value)
-		window[i%sz] = value
-		if i > sz {
-			avg := w.Avg()
-			exp := arrayAvg(window)
-			if math.Abs(avg-exp) > tolerance {
-				t.Fatalf("%d: expected avg %f, got %f", i, exp, avg)
-			}
-			min := w.Min()
-			exp = arrayMin(window)
-			if math.Abs(min-exp) > tolerance {
-				t.Fatalf("%d: expected min %f, got %f", i, exp, min)
-			}
-			max := w.Max()
-			exp = arrayMax(window)
-			if math.Abs(max-exp) > tolerance {
-				t.Fatalf("%d: expected max %f, got %f", i, exp, max)
+	const iterations = 1000
+	for sz := int64(1); sz < 1000; sz++ {
+		w := NewWindow(sz, time.Minute)
+		window := make([]float64, sz)
+		for i := int64(0); i < iterations; i++ {
+			value := rand.Float64()
+			w.Add(value)
+			window[i%sz] = value
+			if i > sz {
+				avg := w.Avg()
+				exp := arrayAvg(window)
+				if math.Abs(avg-exp) > tolerance {
+					t.Fatalf("%d: expected avg %f, got %f", i, exp, avg)
+				}
+				min := w.Min()
+				exp = arrayMin(window)
+				if math.Abs(min-exp) > tolerance {
+					t.Fatalf("%d: expected min %f, got %f", i, exp, min)
+				}
+				max := w.Max()
+				exp = arrayMax(window)
+				if math.Abs(max-exp) > tolerance {
+					t.Fatalf("%d: expected max %f, got %f", i, exp, max)
+				}
 			}
 		}
 	}
