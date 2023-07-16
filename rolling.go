@@ -1,6 +1,11 @@
 package rolling
 
-import "time"
+import (
+	"math"
+	"time"
+
+	"github.com/gammazero/deque"
+)
 
 type ll struct {
 	value float64
@@ -9,18 +14,16 @@ type ll struct {
 	prev  *ll
 }
 
-// Linked list used to keep track of distinct values to support
-// updating Min/Max without scanning the entire window.
-// TODO try BTree, RBT, or SkipList.
-// LL result:
-// BenchmarkWindow_Add_10k-8        3098827               361.9 ns/op
-// BenchmarkWindow_Add_100k-8       2918926               431.5 ns/op
-type setLL struct {
-	value float64
-	cnt   int64
-	next  *setLL
-	prev  *setLL
-}
+// Trying different approaches to maintain min/max values:
+// Linked list:
+// BenchmarkWindow_Add_10k-8          55465             37098 ns/op
+// BenchmarkWindow_Add_100k-8         65210             98093 ns/op
+// RBT:
+// BenchmarkWindow_Add_10k-8        1614670               631.1 ns/op
+// BenchmarkWindow_Add_100k-8       1562439               709.3 ns/op
+// Deque:
+// BenchmarkWindow_Add_10k-8        5558586               213.1 ns/op
+// BenchmarkWindow_Add_100k-8       5055327               211.9 ns/op
 
 type Window struct {
 	maxSize  int64
@@ -33,103 +36,85 @@ type Window struct {
 	min float64
 	max float64
 
-	orderedHead  *setLL
-	orderedTail  *setLL
-	orderedIndex map[float64]*setLL
+	minDeque *deque.Deque[float64]
+	maxDeque *deque.Deque[float64]
 }
 
 func NewWindow(maxSize int64, duration time.Duration) *Window {
 	return &Window{
-		maxSize:      maxSize,
-		duration:     duration,
-		orderedIndex: make(map[float64]*setLL),
+		maxSize:  maxSize,
+		duration: duration,
+		minDeque: deque.New[float64](),
+		maxDeque: deque.New[float64](),
+		min:      math.MaxFloat64,
+		max:      -math.MaxFloat64,
 	}
 }
 
 func (w *Window) addMinMax(value float64) {
-	if value < w.min || w.cnt == 0 {
-		w.min = value
-	}
-	if value > w.max || w.cnt == 0 {
-		w.max = value
-	}
-
-	val, ok := w.orderedIndex[value]
-	if !ok {
-		val = &setLL{value: value, cnt: 0}
-	}
-
-	val.cnt++
-	w.orderedIndex[value] = val
-
-	if ok {
-		// The value is already in the list, we're done here.
-		return
-	}
-
-	if w.orderedHead == nil {
-		w.orderedHead = val
-		w.orderedTail = val
-		return
-	}
-
-	if value < w.orderedHead.value {
-		w.orderedHead.prev = val
-		val.next = w.orderedHead
-		w.orderedHead = val
-		return
-	}
-
-	if value > w.orderedTail.value {
-		w.orderedTail.next = val
-		val.prev = w.orderedTail
-		w.orderedTail = val
-		return
-	}
-
-	// Search for the correct position to insert the new value.
-	for cur := w.orderedHead; cur != nil; cur = cur.next {
-		if value < cur.value {
-			cur.prev.next = val
-			val.prev = cur.prev
-			val.next = cur
-			cur.prev = val
-			return
+	if w.minDeque.Len() > 0 {
+		for w.minDeque.Len() > 0 {
+			b := w.minDeque.Back()
+			if value < b {
+				w.minDeque.PopBack()
+			} else {
+				break
+			}
 		}
 	}
+	w.minDeque.PushBack(value)
+	w.min = w.minDeque.Front()
+
+	if w.maxDeque.Len() > 0 {
+		for w.maxDeque.Len() > 0 {
+			b := w.maxDeque.Back()
+			if value > b {
+				w.maxDeque.PopBack()
+			} else {
+				break
+			}
+		}
+	}
+	w.maxDeque.PushBack(value)
+	w.max = w.maxDeque.Front()
 }
 
 func (w *Window) removeMinMax(value float64) {
-	val := w.orderedIndex[value]
-	val.cnt--
-	if val.cnt > 0 {
-		return
+	if w.maxDeque.Front() == value {
+		w.maxDeque.PopFront()
 	}
-
-	delete(w.orderedIndex, value)
-
-	if val == w.orderedHead {
-		w.orderedHead = val.next
-		w.orderedHead.prev = nil
-		w.min = w.orderedHead.value
-		return
+	if w.maxDeque.Len() == 0 {
+		w.max = -math.MaxFloat64
 	}
-
-	if val == w.orderedTail {
-		w.orderedTail = val.prev
-		w.orderedTail.next = nil
-		w.max = w.orderedTail.value
-		return
+	if w.minDeque.Front() == value {
+		w.minDeque.PopFront()
 	}
-
-	val.prev.next = val.next
-	val.next.prev = val.prev
+	if w.minDeque.Len() == 0 {
+		w.min = math.MaxFloat64
+	}
 }
 
 func (w *Window) Add(value float64) {
-	w.addMinMax(value)
 	w.cnt++
 	w.sum += value
+
+	// Remove head if window is full.
+	if w.cnt > w.maxSize {
+		w.sum -= w.head.value
+		w.cnt--
+		w.removeMinMax(w.head.value)
+		w.head = w.head.next
+	}
+
+	// Truncate old values.
+	for w.head != nil && time.Since(w.head.ts) > w.duration {
+		w.sum -= w.head.value
+		w.cnt--
+		w.removeMinMax(w.head.value)
+		w.head = w.head.next
+	}
+
+	w.addMinMax(value)
 
 	if w.head == nil {
 		w.head = &ll{value: value, ts: time.Now()}
@@ -142,15 +127,8 @@ func (w *Window) Add(value float64) {
 		ts:    time.Now(),
 		prev:  w.tail,
 	}
-	w.tail = w.tail.next
 
-	if w.cnt > w.maxSize ||
-		(w.head != nil && time.Since(w.head.ts) > w.duration) {
-		w.sum -= w.head.value
-		w.removeMinMax(w.head.value)
-		w.head = w.head.next
-		w.cnt--
-	}
+	w.tail = w.tail.next
 }
 
 func (w *Window) Sum() float64 {
