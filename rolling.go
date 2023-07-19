@@ -94,6 +94,9 @@ func (w *Window) removeMinMax(value float64) {
 	}
 }
 
+// Add new value to the tail of the window and evict values from
+// head if cnt > maxSize, or if value's timestamp is older than
+// window duration.
 func (w *Window) Add(value float64) {
 	w.cnt++
 	w.sum += value
@@ -107,12 +110,7 @@ func (w *Window) Add(value float64) {
 	}
 
 	// Truncate old values.
-	for w.head != nil && time.Since(w.head.ts) > w.duration {
-		w.sum -= w.head.value
-		w.cnt--
-		w.removeMinMax(w.head.value)
-		w.head = w.head.next
-	}
+	w.Evict()
 
 	w.addMinMax(value)
 
@@ -131,34 +129,87 @@ func (w *Window) Add(value float64) {
 	w.tail = w.tail.next
 }
 
+// Evict clears outdated values from the window.
+// This is useful if your updates do not come very often and you
+// want to get some metric after some time from last Add and don't want
+// vaules that are older than window duration to affect the result.
+func (w *Window) Evict() {
+	for w.head != nil && time.Since(w.head.ts) > w.duration {
+		w.sum -= w.head.value
+		w.cnt--
+		w.removeMinMax(w.head.value)
+		w.head = w.head.next
+	}
+
+	if w.cnt == 0 {
+		w.sum = math.NaN()
+		w.min = math.MaxFloat64
+		w.max = -math.MaxFloat64
+	}
+}
+
+// Sum of all values in the window.
+// NaN if window is empty.
 func (w *Window) Sum() float64 {
 	return w.sum
 }
 
+// Count of the number of values in the window.
 func (w *Window) Count() int64 {
 	return w.cnt
 }
 
+// Min value in the window.
+// NaN if window is empty.
 func (w *Window) Min() float64 {
+	if w.cnt == 0 {
+		return math.NaN()
+	}
 	return w.min
 }
 
+// Max value in the window.
+// NaN if window is empty.
 func (w *Window) Max() float64 {
+	if w.cnt == 0 {
+		return math.NaN()
+	}
 	return w.max
 }
 
+// Average value in the window.
+// NaN if window is empty.
 func (w *Window) Avg() float64 {
+	if w.cnt == 0 {
+		return math.NaN()
+	}
 	return w.sum / float64(w.cnt)
 }
 
+// Mid returns average between first and last
+// values in the window.
+// NaN if window is empty.
 func (w *Window) Mid() float64 {
-	return w.head.value + (w.tail.value-w.head.value)/2
+	if w.head == nil {
+		return math.NaN()
+	}
+	return (w.head.value + w.tail.value) / 2
 }
 
+// First returns first value of the window.
+// NaN if window is empty.
 func (w *Window) First() float64 {
+	if w.head == nil {
+		return math.NaN()
+	}
 	return w.head.value
 }
 
+// Last returns last value in the window.
+// NaN if window is empty.
 func (w *Window) Last() float64 {
+	if w.tail == nil {
+		return math.NaN()
+	}
 	return w.tail.value
 }
