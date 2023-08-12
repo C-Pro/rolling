@@ -101,6 +101,97 @@ func TestMin(t *testing.T) {
 	}
 }
 
+func TestAvg(t *testing.T) {
+	tests := []struct {
+		name   string
+		wsize  int
+		values []float64
+		expect float64
+	}{
+		{
+			"zero values",
+			3,
+			nil,
+			math.NaN(),
+		},
+		{
+			"1 value",
+			3,
+			[]float64{42},
+			float64(42),
+		},
+		{
+			"3 values",
+			3,
+			[]float64{1, 2, 3},
+			float64(2),
+		},
+		{
+			"5 evict",
+			3,
+			[]float64{1, 3, 4, 2, 3},
+			float64(3),
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.name, func(t *testing.T) {
+			w := NewWindow(int64(tcase.wsize), time.Hour)
+			for _, v := range tcase.values {
+				w.Add(v)
+			}
+			got := w.Avg()
+			if math.Abs(got-tcase.expect) > tolerance {
+				t.Errorf("expected avg %f, but got %f", tcase.expect, got)
+			}
+		})
+	}
+}
+
+func TestOther(t *testing.T) {
+	w := NewWindow(3, time.Second)
+	for i := 0; i < 1000; i++ {
+		w.Add(rand.Float64())
+	}
+	time.Sleep(time.Second)
+
+	w.Add(1)
+	w.Add(2)
+	w.Add(3)
+
+	if w.Count() != 3 {
+		t.Errorf("expected count 3, but got %d", w.Count())
+	}
+
+	if math.Abs(w.First()-1) > tolerance {
+		t.Errorf("expected first 1, but got %f", w.First())
+	}
+
+	if math.Abs(w.Last()-3) > tolerance {
+		t.Errorf("expected last 3, but got %f", w.Last())
+	}
+
+	if math.Abs(w.Mid()-2) > tolerance {
+		t.Errorf("expected mid 2, but got %f", w.Mid())
+	}
+
+	if math.Abs(w.Avg()-2) > tolerance {
+		t.Errorf("expected avg 2, but got %f", w.Avg())
+	}
+
+	if math.Abs(w.Max()-3) > tolerance {
+		t.Errorf("expected max 3, but got %f", w.Max())
+	}
+
+	if math.Abs(w.Min()-1) > tolerance {
+		t.Errorf("expected min 1, but got %f", w.Min())
+	}
+
+	if math.Abs(w.Sum()-6) > tolerance {
+		t.Errorf("expected sum 6, but got %f", w.Sum())
+	}
+}
+
 func arrayMax(a []float64) float64 {
 	max := -math.MaxFloat64
 	for _, v := range a {
