@@ -101,6 +101,47 @@ func TestMin(t *testing.T) {
 	}
 }
 
+func TestEvictAll(t *testing.T) {
+	w := NewWindow(3, time.Millisecond*5)
+	w.Add(1)
+	w.Add(2)
+	w.Add(3)
+	w.Add(4)
+	w.Add(5)
+	w.Add(6)
+	w.Add(7)
+	time.Sleep(time.Millisecond * 100)
+	w.Evict()
+
+	if w.Count() != 0 {
+		t.Errorf("expected count 0, but got %d", w.Count())
+	}
+
+	if !math.IsNaN(w.First()) {
+		t.Errorf("expected first NaN, but got %f", w.First())
+	}
+
+	if !math.IsNaN(w.Last()) {
+		t.Errorf("expected last NaN, but got %f", w.Last())
+	}
+
+	if !math.IsNaN(w.Mid()) {
+		t.Errorf("expected mid NaN, but got %f", w.Mid())
+	}
+
+	if !math.IsNaN(w.Avg()) {
+		t.Errorf("expected avg NaN, but got %f", w.Avg())
+	}
+
+	if !math.IsNaN(w.Max()) {
+		t.Errorf("expected max NaN, but got %f", w.Max())
+	}
+
+	if !math.IsNaN(w.Min()) {
+		t.Errorf("expected min NaN, but got %f", w.Min())
+	}
+}
+
 func TestAvg(t *testing.T) {
 	tests := []struct {
 		name   string
