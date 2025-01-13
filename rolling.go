@@ -104,7 +104,6 @@ func (w *Window) Add(value float64) {
 // AddAt adds new value to the tail of the window with a specified timestamp.
 // Usually you need Add method. This one main purpose is to add past values
 // on service restart.
-// Notice that you still need to add values in order of their timestamps.
 // If you attepmt to add value with timestamp older than the last one,
 // it will be discarded.
 func (w *Window) AddAt(value float64, at time.Time) {
@@ -112,7 +111,7 @@ func (w *Window) AddAt(value float64, at time.Time) {
 	if w.tail != nil && at.Before(w.tail.ts) {
 		return
 	}
-
+  
 	w.cnt++
 	w.sum += value
 
