@@ -98,6 +98,21 @@ func (w *Window) removeMinMax(value float64) {
 // head if cnt > maxSize, or if value's timestamp is older than
 // window duration.
 func (w *Window) Add(value float64) {
+	w.AddAt(value, time.Now())
+}
+
+// AddAt adds new value to the tail of the window with a specified timestamp.
+// Usually you need Add method. This one main purpose is to add past values
+// on service restart.
+// Notice that you still need to add values in order of their timestamps.
+// If you attepmt to add value with timestamp older than the last one,
+// it will be discarded.
+func (w *Window) AddAt(value float64, at time.Time) {
+	// Ignore values older than the tail.
+	if w.tail != nil && at.Before(w.tail.ts) {
+		return
+	}
+
 	w.cnt++
 	w.sum += value
 
@@ -115,14 +130,14 @@ func (w *Window) Add(value float64) {
 	w.addMinMax(value)
 
 	if w.head == nil {
-		w.head = &ll{value: value, ts: time.Now()}
+		w.head = &ll{value: value, ts: at}
 		w.tail = w.head
 		return
 	}
 
 	w.tail.next = &ll{
 		value: value,
-		ts:    time.Now(),
+		ts:    at,
 		prev:  w.tail,
 	}
 
