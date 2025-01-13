@@ -291,6 +291,30 @@ func TestFuzz(t *testing.T) {
 	}
 }
 
+func TestEvictAddAtOutOfOrder(t *testing.T) {
+	w := NewWindow(1000, time.Millisecond*100)
+	for i := 0; i < 10000; i++ {
+		w.AddAt(rand.Float64(), time.Now().Add(time.Duration(rand.Intn(100))*time.Millisecond))
+	}
+	time.Sleep(time.Millisecond * 201)
+	w.Evict()
+	if w.Count() != 0 {
+		t.Errorf("expected count 0, but got %d", w.Count())
+	}
+	if w.head != nil {
+		t.Errorf("expected head nil, but got %v", w.head)
+	}
+	if w.tail != nil {
+		t.Errorf("expected tail nil, but got %v", w.tail)
+	}
+	if w.maxDeque.Len() != 0 {
+		t.Errorf("expected maxDeque len 0, but got %d", w.maxDeque.Len())
+	}
+	if w.minDeque.Len() != 0 {
+		t.Errorf("expected minDeque len 0, but got %d", w.minDeque.Len())
+	}
+}
+
 func BenchmarkWindow_Add_10k(b *testing.B) {
 	w := NewWindow(10_000, time.Second)
 	for i := 0; i < b.N; i++ {
