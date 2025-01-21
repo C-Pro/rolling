@@ -52,29 +52,27 @@ func NewWindow(maxSize int64, duration time.Duration) *Window {
 }
 
 func (w *Window) addMinMax(value float64) {
-	if w.minDeque.Len() > 0 {
-		for w.minDeque.Len() > 0 {
-			b := w.minDeque.Back()
-			if value < b {
-				w.minDeque.PopBack()
-			} else {
-				break
-			}
+	for w.minDeque.Len() > 0 {
+		b := w.minDeque.Back()
+		if value < b {
+			w.minDeque.PopBack()
+		} else {
+			break
 		}
 	}
+
 	w.minDeque.PushBack(value)
 	w.min = w.minDeque.Front()
 
-	if w.maxDeque.Len() > 0 {
-		for w.maxDeque.Len() > 0 {
-			b := w.maxDeque.Back()
-			if value > b {
-				w.maxDeque.PopBack()
-			} else {
-				break
-			}
+	for w.maxDeque.Len() > 0 {
+		b := w.maxDeque.Back()
+		if value > b {
+			w.maxDeque.PopBack()
+		} else {
+			break
 		}
 	}
+
 	w.maxDeque.PushBack(value)
 	w.max = w.maxDeque.Front()
 }
@@ -104,14 +102,14 @@ func (w *Window) Add(value float64) {
 // AddAt adds new value to the tail of the window with a specified timestamp.
 // Usually you need Add method. This one main purpose is to add past values
 // on service restart.
-// If you attepmt to add value with timestamp older than the last one,
+// If you attempt to add value with timestamp older than the last one,
 // it will be discarded.
 func (w *Window) AddAt(value float64, at time.Time) {
 	// Ignore values older than the tail.
 	if w.tail != nil && at.Before(w.tail.ts) {
 		return
 	}
-  
+
 	w.cnt++
 	w.sum += value
 
