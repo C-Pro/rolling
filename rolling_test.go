@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -292,9 +293,12 @@ func TestFuzz(t *testing.T) {
 }
 
 func TestEvictAddAtOutOfOrder(t *testing.T) {
-	w := NewWindow(1000, time.Millisecond*100)
+	w := NewWindow(100, time.Millisecond*100)
+	before := runtime.MemStats{}
+	runtime.GC()
+	runtime.ReadMemStats(&before)
 	for i := 0; i < 10000; i++ {
-		w.AddAt(rand.Float64(), time.Now().Add(time.Duration(rand.Intn(100))*time.Millisecond))
+		w.AddAt(rand.Float64(), time.Now().Add((50*time.Millisecond)-time.Duration(rand.Intn(100))*time.Millisecond))
 	}
 	time.Sleep(time.Millisecond * 201)
 	w.Evict()
@@ -312,6 +316,12 @@ func TestEvictAddAtOutOfOrder(t *testing.T) {
 	}
 	if w.minDeque.Len() != 0 {
 		t.Errorf("expected minDeque len 0, but got %d", w.minDeque.Len())
+	}
+	after := runtime.MemStats{}
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	if after.HeapAlloc > before.HeapAlloc {
+		t.Errorf("expected heap alloc difference to be zero, but got %d bytes", after.HeapAlloc-before.HeapAlloc)
 	}
 }
 
