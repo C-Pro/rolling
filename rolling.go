@@ -106,9 +106,9 @@ func (w *Window) Add(value float64) {
 // it will be discarded.
 func (w *Window) AddAt(value float64, at time.Time) {
 	// Ignore values older than the tail.
-	// if w.tail != nil && at.Before(w.tail.ts) {
-	// 	return
-	// }
+	if w.tail != nil && at.Before(w.tail.ts) {
+		return
+	}
 
 	w.cnt++
 	w.sum += value
