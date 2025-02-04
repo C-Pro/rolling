@@ -11,7 +11,6 @@ type ll struct {
 	value float64
 	ts    time.Time
 	next  *ll
-	prev  *ll
 }
 
 // Trying different approaches to maintain min/max values:
@@ -135,7 +134,6 @@ func (w *Window) AddAt(value float64, at time.Time) {
 	w.tail.next = &ll{
 		value: value,
 		ts:    at,
-		prev:  w.tail,
 	}
 
 	w.tail = w.tail.next
