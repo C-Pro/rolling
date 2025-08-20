@@ -157,7 +157,7 @@ func (w *Window) Evict() {
 	}
 
 	if w.cnt == 0 {
-		w.sum = math.NaN()
+		w.sum = 0
 		w.min = math.MaxFloat64
 		w.max = -math.MaxFloat64
 	}
